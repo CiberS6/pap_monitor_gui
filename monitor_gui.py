@@ -291,7 +291,7 @@ def suggest_solution(issue):
     }
     return solutions.get(issue, "Solução desconhecida.")
 
-def analyze_device_status(device, ip):
+def analyze_device_status(device):
     """Analisa o status do dispositivo e retorna um texto de status."""
     ip = decrypt_data(device['ip'])
     is_reachable, ping_output = check_ping(ip)
@@ -385,30 +385,26 @@ def packet_callback(packet):
             # Salvar a colisão no banco de dados
             save_collision_to_db(src_ip, dst_ip, protocol, details)
 
-            # Exibir informações na janela principal
-            info = f"Colisão detectada:\nOrigem: {src_ip}\nDestino: {dst_ip}\nProtocolo: {protocol}\nDetalhes: {details}\n"
-            capture_text.insert(tk.END, info + "\n")
-            capture_text.yview(tk.END)
+            # Exibir um alerta em tempo real
+            messagebox.showwarning("Alerta de Colisão", f"Colisão detectada:\nOrigem: {src_ip}\nDestino: {dst_ip}\nProtocolo: {protocol}\nDetalhes: {details}")
+
+        # Exibir informações no texto da interface
+        info = f"Pacote {protocol} de {src_ip} para {dst_ip} - {details}"
+        capture_text.insert(tk.END, info + "\n")
+        capture_text.yview(tk.END)
 
 
 def capture_packets():
     """Inicia a captura de pacotes com detecção de colisões."""
+    capture_window = tk.Toplevel()
+    capture_window.title("Captura de Pacotes")
+
     global capture_text
+    capture_text = scrolledtext.ScrolledText(capture_window, width=80, height=30)
+    capture_text.pack(padx=10, pady=10)
 
-    # Verificar se a janela de captura já está aberta
-    if not hasattr(capture_packets, "capture_window") or not capture_packets.capture_window.winfo_exists():
-        capture_packets.capture_window = tk.Toplevel()
-        capture_packets.capture_window.title("Captura de Pacotes")
-
-        capture_text = scrolledtext.ScrolledText(capture_packets.capture_window, width=80, height=30)
-        capture_text.pack(padx=10, pady=10)
-
-        capture_thread = threading.Thread(target=lambda: scapy.sniff(prn=packet_callback, store=False))
-        capture_thread.daemon = True
-        capture_thread.start()
-    else:
-        capture_packets.capture_window.lift()
-
+    capture_thread = threading.Thread(target=lambda: scapy.sniff(prn=packet_callback, store=False))
+    capture_thread.start()
 
 # ===========================
 # Gerenciamento de Dados
