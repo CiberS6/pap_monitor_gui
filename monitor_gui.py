@@ -1,10 +1,7 @@
 import tkinter as tk
 import hashlib
-import json
-from tkinter import ttk
 from tkinter import messagebox, scrolledtext
 from tkinter.simpledialog import askstring
-from datetime import datetime
 import scapy.all as scapy
 import subprocess
 import threading
@@ -291,7 +288,7 @@ def suggest_solution(issue):
     }
     return solutions.get(issue, "Solução desconhecida.")
 
-def analyze_device_status(device, ip):
+def analyze_device_status(device):
     """Analisa o status do dispositivo e retorna um texto de status."""
     ip = decrypt_data(device['ip'])
     is_reachable, ping_output = check_ping(ip)
@@ -385,30 +382,26 @@ def packet_callback(packet):
             # Salvar a colisão no banco de dados
             save_collision_to_db(src_ip, dst_ip, protocol, details)
 
-            # Exibir informações na janela principal
-            info = f"Colisão detectada:\nOrigem: {src_ip}\nDestino: {dst_ip}\nProtocolo: {protocol}\nDetalhes: {details}\n"
-            capture_text.insert(tk.END, info + "\n")
-            capture_text.yview(tk.END)
+            # Exibir um alerta em tempo real
+            messagebox.showwarning("Alerta de Colisão", f"Colisão detectada:\nOrigem: {src_ip}\nDestino: {dst_ip}\nProtocolo: {protocol}\nDetalhes: {details}")
+
+        # Exibir informações no texto da interface
+        info = f"Pacote {protocol} de {src_ip} para {dst_ip} - {details}"
+        capture_text.insert(tk.END, info + "\n")
+        capture_text.yview(tk.END)
 
 
 def capture_packets():
     """Inicia a captura de pacotes com detecção de colisões."""
+    capture_window = tk.Toplevel()
+    capture_window.title("Captura de Pacotes")
+
     global capture_text
+    capture_text = scrolledtext.ScrolledText(capture_window, width=80, height=30)
+    capture_text.pack(padx=10, pady=10)
 
-    # Verificar se a janela de captura já está aberta
-    if not hasattr(capture_packets, "capture_window") or not capture_packets.capture_window.winfo_exists():
-        capture_packets.capture_window = tk.Toplevel()
-        capture_packets.capture_window.title("Captura de Pacotes")
-
-        capture_text = scrolledtext.ScrolledText(capture_packets.capture_window, width=80, height=30)
-        capture_text.pack(padx=10, pady=10)
-
-        capture_thread = threading.Thread(target=lambda: scapy.sniff(prn=packet_callback, store=False))
-        capture_thread.daemon = True
-        capture_thread.start()
-    else:
-        capture_packets.capture_window.lift()
-
+    capture_thread = threading.Thread(target=lambda: scapy.sniff(prn=packet_callback, store=False))
+    capture_thread.start()
 
 # ===========================
 # Gerenciamento de Dados
@@ -420,26 +413,6 @@ def scan_and_save_network(ip_range):
     for device in devices:
         save_device_to_db(device)
     return devices
-
-def show_stored_devices():
-    """Mostra os dispositivos armazenados no banco de dados."""
-    stored_devices = get_all_devices_from_db()
-
-    stored_window = tk.Toplevel()
-    stored_window.title("Dispositivos Armazenados")
-
-    stored_text = scrolledtext.ScrolledText(stored_window, width=80, height=30)
-    stored_text.pack(padx=10, pady=10)
-
-    stored_text.insert(tk.END, "Dispositivos Armazenados no Banco de Dados:\n")
-    stored_text.insert(tk.END, f"{'IP':<20} {'MAC':<20} {'Hostname':<25} {'Última Vez Visto'}\n")
-    stored_text.insert(tk.END, "-" * 100 + "\n")
-
-    for device in stored_devices:
-        ip, mac, hostname, last_seen = device
-        stored_text.insert(tk.END, f"{ip:<20} {mac:<20} {hostname:<25} {last_seen}\n")
-
-    stored_text.yview(tk.END)
 
 def show_stored_collisions():
     """Mostra as colisões armazenadas no banco de dados."""
@@ -525,7 +498,6 @@ def create_main_app(username=None):
                         output_text)).start()).pack(pady=5)
     tk.Button(frame, text="Capturar Pacotes", command=capture_packets).pack(pady=5)
     tk.Button(frame, text="Visualizar Topologia", command=draw_network_topology).pack(pady=5)
-    tk.Button(frame, text="Dispositivos Salvos no BD", command=show_stored_devices).pack(pady=5)
     tk.Button(frame, text="Mostrar Colisões", command=show_stored_collisions).pack(pady=5)
 
     window.geometry("900x600")
@@ -544,15 +516,15 @@ def login():
             log_access(username, "Login bem-sucedido")
             messagebox.showinfo("Bem-vindo", f"Bem-vindo(a), {username}!")
             login_window.destroy()
+            create_main_app()
         else:
             log_access(username, "Tentativa de login falhou")
             messagebox.showerror("Erro", "Credenciais inválidas!")
 
-
     login_window = tk.Tk()
     login_window.title("Login")
 
-    tk.Label(login_window, text="Usuário:").pack(padx=10, pady=5)
+    tk.Label(login_window, text="Utilizador:").pack(padx=10, pady=5)
     username_entry = tk.Entry(login_window, width=30)
     username_entry.pack()
 
@@ -563,10 +535,11 @@ def login():
     tk.Button(login_window, text="Entrar", command=attempt_login).pack(pady=10)
     tk.Button(login_window, text="Registrar", command=register).pack()
 
+    # Aguardar até que a janela de login seja fechada antes de continuar
     login_window.mainloop()
 
 def register():
-    """Tela de registro de novo usuário."""
+    """Tela de registro de novo utilizador."""
     def attempt_register():
         username = username_entry.get()
         password = password_entry.get()
@@ -574,7 +547,7 @@ def register():
         register_window.destroy()
 
     register_window = tk.Tk()
-    register_window.title("Registrar Usuário")
+    register_window.title("Registar")
 
     tk.Label(register_window, text="Usuário:").pack(padx=10, pady=5)
     username_entry = tk.Entry(register_window, width=30)
@@ -592,10 +565,9 @@ def register():
 # Inicialização
 # ===========================
 
-
 if __name__ == "__main__":
     initialize_authentication_db()
     initialize_database()
+    
+    # Realiza o login antes de continuar
     login()
-    create_main_app()
-
